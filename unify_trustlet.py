@@ -7,23 +7,28 @@ P_FILESZ_OFFSET = 0x10
 P_OFFSET_OFFSET = 0x4
 
 def main():
-
 	#Reading the arguments
-	if len(sys.argv) != 4:
-		print "USAGE: <TRUSTLET_DIR> <TRUSTLET_NAME> <OUTPUT_FILE_PATH>"
+	if len(sys.argv) != 3:
+		print "USAGE: <input.mdt> <output>"
 		return
-	trustlet_dir = sys.argv[1]
-	trustlet_name = sys.argv[2]
-	output_file_path = sys.argv[3]
+	
+	input_file = sys.argv[1]
 
 	#Reading the ELF header from the ".mdt" file
-	mdt = open(os.path.join(trustlet_dir, "%s.mdt" % trustlet_name), "rb")
+	mdt = open(input_file, "rb")
 	elf_header = mdt.read(ELF_HEADER_SIZE)
 	phnum = struct.unpack("<H", elf_header[E_PHNUM_OFFSET:E_PHNUM_OFFSET+2])[0]
 	print "[+] Found %d program headers" % phnum
 	
 	#Reading each of the program headers and copying the relevant chunk
-	output_file = open(output_file_path, 'wb')
+	output_file = open(sys.argv[2], 'wb')
+	ife = os.path.splitext(input_file)
+	if not ife[1]:
+		print "[-] something went wrong; expecting file with extension"
+		return
+
+	chunk_prefix = ife[0]
+	block_prefix = "B" if chunk_prefix[0].isupper() else "b"
 	for i in range(0, phnum):
 
 		#Reading the PHDR
@@ -38,9 +43,13 @@ def main():
 			continue #There's no backing block
 
 		#Copying out the data in the block
-		block = open(os.path.join(trustlet_dir, "%s.b%02d" % (trustlet_name, i)), 'rb').read()
-		output_file.seek(p_offset, 0)
-		output_file.write(block)
+		try:
+			block = open(os.path.join("%s.%s%02d" % (chunk_prefix, block_prefix, i)), 'rb').read()
+			output_file.seek(p_offset, 0)
+			output_file.write(block)
+		except IOError as e:
+			print "[-] %s" %(str(e))
+			return
 
 	mdt.close()
 	output_file.close()
